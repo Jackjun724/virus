@@ -1,0 +1,291 @@
+<html lang="zh">
+<head>
+  <title>病毒传播模拟</title>
+  <meta charset="utf-8"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900"/>
+  <script src="https://cdn.bootcss.com/vue/2.6.10/vue.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vant@2.4/lib/index.css">
+  <script src="https://cdn.jsdelivr.net/npm/vant@2.4/lib/vant.min.js"></script>
+  <script src="https://cdn.bootcss.com/p5.js/0.9.0/p5.js"></script>
+  <script>
+    let globalFontSize;
+    (function (win, doc) {
+      var resizeEvt = 'orientationchange' in win ? 'orientationchange' : 'resize';
+
+      function setSize() {
+        var docEl = doc.documentElement;
+        let dpr = parseInt(win.devicePixelRatio) || 1;
+
+        doc.body.style.fontSize = 12 * dpr + 'px';
+        var rem = docEl.clientWidth * 0.1; //划分界面为10份
+        docEl.style.fontSize = rem + 'px';
+        var fontSize = parseFloat(docEl.style.fontSize),
+          computeFontSize = parseFloat(window.getComputedStyle(docEl).fontSize);
+        if (fontSize !== computeFontSize) {
+          docEl.style.fontSize = (fontSize * fontSize) / computeFontSize + 'px';
+        }
+        win.dpr = dpr;
+        win.fontSize = fontSize;
+        globalFontSize = fontSize;
+      }
+
+      win.addEventListener(resizeEvt, setSize);
+      win.addEventListener('pageshow', function (e) {
+        if (e.persisted) {
+          setSize();
+        }
+      });
+      doc.addEventListener('DOMContentLoaded', setSize, false);
+    })(window, document);
+  </script>
+  <style>
+    *,
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      font-size: .4rem;
+    }
+  </style>
+  <style>
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: absolute;
+      z-index: 100;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    .btn-group {
+      position: fixed;
+      right: 1em;
+    }
+
+    .popup-setting, .popup-stats {
+      padding: 1em 1.7em 0 1.5em;
+      box-sizing: border-box;
+      color: #333;
+    }
+
+    .popup-setting .title, .popup-stats .title {
+      font-weight: 700;
+      font-size: 1.2em;
+    }
+
+    .form-label {
+      margin: 0;
+      padding: 2em 0 1em;
+      color: rgba(69, 90, 100, 0.6);
+      font-weight: normal;
+      font-size: .9em;
+      line-height: 1.2em;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="btn-group">
+    <van-button icon="setting" @click="showSettingPopup=true"></van-button>
+    <van-button icon="weapp-nav" @click="showStatsPopup=true"></van-button>
+  </div>
+  <van-popup v-model="showSettingPopup"
+             closeable
+             round
+             position="bottom"
+             :style="{ height: popupHeight }" class="popup-setting">
+    <span class="title">参数</span>
+    <div style="margin-bottom:2em;">
+      <div class="form-label" v-text="'感染概率：' + param.infectionRate + '%'"></div>
+      <van-slider v-model="param.infectionRate" :min="0" :step="1" :max="100" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'感染范围：' + param.range"></div>
+      <van-slider v-model="param.range" :min="1" :step="1" :max="10" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'医院响应时间：' + param.hospitalResponseDays + '天'"></div>
+      <van-slider v-model="param.hospitalResponseDays" :min="1" :step="1" :max="20" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'可能治愈的天数：' + param.recoverDays + '天'"></div>
+      <van-slider v-model="param.recoverDays" :min="1" :step="1" :max="100" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'可能治愈的概率：' + param.recoverRate + '%'"></div>
+      <van-slider v-model="param.recoverRate" :min="1" :step="1" :max="100" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'可能致死的天数：' + param.recoverDays + '天'"></div>
+      <van-slider v-model="param.diedDays" :min="1" :step="1" :max="100" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'可能致死的概率：' + param.recoverRate + '%'"></div>
+      <van-slider v-model="param.diedRate" :min="1" :step="1" :max="100" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'床位：' + param.numOfBed + '个'"></div>
+      <van-slider v-model="param.numOfBed" :min="1" :step="1" :max="10000" @change="paramChange"></van-slider>
+      <div class="form-label" v-text="'潜伏时间：' + param.dormantDays + '天'"></div>
+      <van-slider v-model="param.dormantDays" :min="1" :step="6" :max="14" @change="paramChange"></van-slider>
+      <div class="form-label" style="padding-bottom: 0;font-weight: 700">以上参数动态生效 以下参数修改要重新模拟:</div>
+      <div class="form-label" v-text="'人群移动速度：' + param.speed"></div>
+      <van-slider v-model="param.speed" :min="1" :step="1" :max="100"></van-slider>
+      <div class="form-label" v-text="'人群活动范围大小：' + param.rangeOfActivity"></div>
+      <van-slider v-model="param.rangeOfActivity" :min="1" :step="1" :max="100"></van-slider>
+      <div class="form-label" v-text="'初始感染：' + param.beginInfectionNum + '人'"></div>
+      <van-slider v-model="param.beginInfectionNum" :min="1" :step="1" :max="100"></van-slider>
+      <div class="form-label" v-text="'总人数：' + param.total + '人'"></div>
+      <van-slider v-model="param.total" :min="1" :step="1" :max="8000"></van-slider>
+    </div>
+    <div style="text-align: center;margin-bottom:1.8em;">
+      <van-button plain type="info" @click="restart">重新模拟</van-button>
+    </div>
+  </van-popup>
+
+  <van-popup v-model="showStatsPopup"
+             closeable
+             round
+             position="bottom"
+             class="popup-stats">
+    <div class="title" style="margin-bottom: 2em" v-text="'统计（'+ statsData.days +' Days）'"></div>
+    <div style="display: flex;justify-content: space-around;margin-bottom: 1em;">
+      <van-circle
+        v-model="statsData.infectionRate"
+        :rate="100"
+        layer-color="#ebedf0"
+        stroke-width="60"
+        :color="  {'0%': '#ffb5b2','100%': '#f6001f'}"
+        text="感染比例"></van-circle>
+      <van-circle
+        v-model="statsData.bedRate"
+        :rate="100"
+        layer-color="#ebedf0"
+        stroke-width="60"
+        :color="{'0%': '#3fecff','100%': '#6149f6'}"
+        text="床位使用"></van-circle>
+    </div>
+    <div class="form-label" style="padding: 1em 0 0;" v-text="'感染人数：' + statsData.infection + ' 人'"></div>
+    <div class="form-label" style="padding: 1em 0 0;" v-text="'床位剩余：' + (statsData.remaining - statsData.useBed) + ' 个'"></div>
+    <div class="form-label" style="padding: 1em 0 0;" v-text="'死亡人数：' + statsData.dead + ' 人'"></div>
+    <div class="form-label" style="padding: 1em 0 0;margin-bottom: 1em" v-text="'治愈人数：' + statsData.recover + ' 人'"></div>
+  </van-popup>
+</div>
+</body>
+</html>
+<script type="text/javascript" src="./bitArray.js"></script>
+<script type="text/javascript" src="./animation.js"></script>
+<script>
+  let dynParam = new Params();
+  let canvasEl = "<canvas id='canvas' width='" + screen.availWidth + "px' height='" + screen.availHeight + "px'></canvas>";
+  document.body.insertAdjacentHTML("beforeEnd", canvasEl);
+
+  let el = document.getElementById('canvas');
+  new p5();
+  let evolution = new Evolution(el, dynParam);
+
+  let vue = new Vue({
+    el: '#app',
+    data: {
+      showSettingPopup: false,
+      showStatsPopup: false,
+      popupHeight: '50%',
+      statsData: {
+        days: 0,
+        useBed: 0,
+        remaining: 0,
+        dead: 0,
+        recover: 0,
+        infection: 0,
+        infectionRate: 0,
+        bedRate: 0,
+      },
+      param: {
+        // 感染率
+        infectionRate: 50,
+        // 初始感染数
+        beginInfectionNum: 2,
+        // 总人数
+        total: 1000,
+        // 感染范围
+        range: 3,
+        // 医院响应时间
+        hospitalResponseDays: 2,
+        // 可能恢复的天数
+        recoverDays: 20,
+        // 恢复概率
+        recoverRate: 1,
+        numOfBed: 100,
+        dormantDays: 14,
+        // 可能致死的天数
+        diedDays: 30,
+        // 致死概率
+        diedRate: 1,
+        // 人群移动速度
+        speed: 10,
+        // 人群活动范围大小
+        rangeOfActivity: 50,
+      },
+
+    },
+    methods: {
+      paramChange() {
+        // 感染率
+        dynParam.infectionRate = this.param.infectionRate / 100;
+        // 初始感染数
+        dynParam.beginInfectionNum = this.param.beginInfectionNum;
+        // 总人数
+        dynParam.total = this.param.total;
+        // 感染范围
+        dynParam.range = this.param.range;
+        // 医院响应时间
+        dynParam.hospitalResponseDays = this.param.hospitalResponseDays;
+        // 可能恢复的天数
+        dynParam.recoverDays = this.param.recoverDays;
+        // 恢复概率
+        dynParam.recoverRate = this.param.recoverRate / 100;
+        dynParam.numOfBed = this.param.numOfBed;
+        // 潜伏时间
+        dynParam.dormantDays = this.param.dormantDays;
+        // 可能致死的天数
+        dynParam.diedDays = this.param.diedDays;
+        // 致死概率
+        dynParam.diedRate = this.param.diedRate / 100;
+        // 人群移动速度
+        dynParam.speed = this.param.speed;
+        // 人群活动范围大小
+        dynParam.rangeOfActivity = this.param.rangeOfActivity;
+      },
+      restart() {
+        // 重新模拟
+        evolution.shutdown();
+        this.paramChange();
+        evolution = new Evolution(el, dynParam);
+        let _this = this;
+        evolution.start((days, useBed, remaining, dead, recover, infection) => {
+          _this.statsData.days = days;
+          _this.statsData.useBed = useBed;
+          _this.statsData.remaining = remaining;
+          _this.statsData.dead = dead;
+          _this.statsData.recover = recover;
+          _this.statsData.infection = infection;
+          _this.statsData.infectionRate = infection / _this.param.total * 100;
+          _this.statsData.bedRate = useBed / remaining * 100
+        })
+      }
+    },
+    mounted() {
+      this.$dialog.alert({
+        title: '武汉加油！',
+        message: '模拟新冠病毒传播，通过参数可自定义模拟，默认参数也可以模拟，黄色代表潜伏状态，红色代表表现型感染状态，白色代表正常，右上角有统计面板。国家已经做到尽可能有效的拦截病毒传播和管制，真正能阻止灾难发生的，还是自己。\n ' +
+          '(Tips: 调低人群活动范围与速度会显著降低病毒传播速度，增加病床数量与医院响应速度可以加速治理) \n切勿用于非法传播及商业途径！！'
+      });
+    }
+  });
+
+
+  // 开始处理
+  evolution.start((days, useBed, remaining, dead, recover, infection) => {
+    vue._data.statsData.days = days;
+    vue._data.statsData.useBed = useBed;
+    vue._data.statsData.remaining = remaining;
+    vue._data.statsData.dead = dead;
+    vue._data.statsData.recover = recover;
+    vue._data.statsData.infection = infection;
+    vue._data.statsData.infectionRate = infection / vue._data.param.total * 100;
+    vue._data.statsData.bedRate = useBed / remaining * 100
+  })
+</script>
+
