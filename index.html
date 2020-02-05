@@ -92,6 +92,7 @@
 <body>
 <div id="app">
   <div class="btn-group">
+    <van-button icon="star" @click="openGithub"></van-button>
     <van-button icon="setting" @click="showSettingPopup=true"></van-button>
     <van-button icon="weapp-nav" @click="showStatsPopup=true"></van-button>
   </div>
@@ -158,9 +159,11 @@
         text="床位使用"></van-circle>
     </div>
     <div class="form-label" style="padding: 1em 0 0;" v-text="'感染人数：' + statsData.infection + ' 人'"></div>
-    <div class="form-label" style="padding: 1em 0 0;" v-text="'床位剩余：' + (statsData.remaining - statsData.useBed) + ' 个'"></div>
+    <div class="form-label" style="padding: 1em 0 0;"
+         v-text="'床位剩余：' + (statsData.remaining - statsData.useBed) + ' 个'"></div>
     <div class="form-label" style="padding: 1em 0 0;" v-text="'死亡人数：' + statsData.dead + ' 人'"></div>
-    <div class="form-label" style="padding: 1em 0 0;margin-bottom: 1em" v-text="'治愈人数：' + statsData.recover + ' 人'"></div>
+    <div class="form-label" style="padding: 1em 0 0;margin-bottom: 1em"
+         v-text="'治愈人数：' + statsData.recover + ' 人'"></div>
   </van-popup>
 </div>
 </body>
@@ -264,6 +267,9 @@
           _this.statsData.infectionRate = infection / _this.param.total * 100;
           _this.statsData.bedRate = useBed / remaining * 100
         })
+      },
+      openGithub() {
+        window.open('https://github.com/Jackjun724/virus')
       }
     },
     mounted() {
